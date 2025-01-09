@@ -233,8 +233,8 @@ enum Token
 	// ------------------------------------------------------------------------
 	// ':', LABEL
 	//
-	// :label `labels are most commonly used along
-	//         with the jmp token '=>', see below for more information on that.`
+	// :label `labels are most commonly used along with the jmp token '=>', see
+	//         below for more information on that.`
 	// 
 	// :1 `numerical names can be used to indicate a temporary label. for an
 	//     example using this, see below.`
