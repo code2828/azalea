@@ -7,25 +7,9 @@
 #define ERR_CHAR_UNXP_EOF "Err: Unexpected EOF instead of an enclosing \'."
 #define ERR_CHAR_UKN_ESC "Err: Unknown escape sequence."
 #define ERR_STR_UNXP_EOF "Err: Unexpected EOF instead of an enclosing \"."
-
-#define IS_WHITESPACE(c) ((c) == ' ' || (c) == '\t' || (c) == '\n' || (c) == '\r')
+#define ERR_CMT_UNXP_EOF "Err: Unexpected EOF instead of an enclosing `."
 
 using namespace std;
-
-// Whitespaces, newlines and indentations are purely for readability and are
-// needed only when necessary. Thus, the example of TOK_JMP can also be written
-// as:
-//
-// #a
-// @a = 0
-// :loop
-// @a ++
-// << @a + '0' << '\n'
-// ? @a == 100 , =>1 ; =>loop . :1
-//
-// or even denser:
-//
-// #a@a=0:loop@a++<<@a+'0'<<'\n'?@a==100,=>1;=>loop.:1
 
 enum Token
 {
@@ -48,6 +32,8 @@ enum Token
 	// @q = 2 `OK`
 	// q++
 	// @q = 3 `INVALID - runtime error, same as above`
+	//
+	// #a b c d e `allocate five ints and assign respectively in one loc`
 	TOK_ALLOC,
 
 	// '$', FREE
@@ -65,7 +51,7 @@ enum Token
 	// @(q+1) = 1
 	// @(q+2) = 2
 	// @(q+3) = 3
-	// $q `if a block of memory was alloc-ed for p, it will be automatically
+	// $q `if a block of memory was alloc-ed for q, it will be automatically
 	//     deallocated`
 	//
 	// #r 3
@@ -252,11 +238,12 @@ enum Token
 	//     << '\n'
 	//     `checks if @a is 100; if yes then break, else enter next loop.`
 	//	   ? @a == 100 ,
-	//	       =>1 `jumping to numbers lands you on the very next label with the
-	//	            same number. This helps avoid using excessive labels with
-	//	            meaningless names for break statements. These labels can be
-	//	            considered temporary and can be reused, while labels whose
-	//	            names are identifiers cannot be redefined and are unique.`
+	//	       =>1 `jumping to numbers lands you on the very next label with
+	//	            the same number. This helps avoid using excessive labels
+	//	            with meaningless names for break statements. These labels
+	//	            can be considered temporary and can be reused, while labels
+	//	            whose names are identifiers cannot be redefined and are
+	//	            unique.`
 	//	   ;
 	//	       =>loop
 	//	   .
@@ -272,9 +259,6 @@ enum Token
 	// @a = 0
 	// =>q
 	// << @a + '0' `=> prints: 1`
-	//
-	// \ 5 `sets special identifier @_ to 5 and return`
-	// \ a `let _ be the same as a and return`
 	TOK_RET,
 
 	
@@ -364,19 +348,55 @@ enum Token
 	TOK_NUM
 };
 
+inline bool is_whitespace(char c)
+{
+	return ((c) == ' ' || (c) == '\t' || (c) == '\n' || (c) == '\r');
+}
+
 vector<Token> tokens;
 
 //                            ** PREPROCESSING **
 // ----------------------------------------------------------------------------
 // As a really simple language, one could expect Eryuelan to have little need
-// for preprocessing. As such, there are only three operations that the prepro-
-// cessor is meant to do (in order):
+// for preprocessing. As such, there are only four things that the preprocessor
+// is meant to do (in order):
 //
-// 1. Replace all string literals with a list of characters.
-// 2. Replace all character literals with ints.
-// 3. Checkwhite.
+// 1. Remove comments.
+// 2. Replace all string literals with a list of characters.
+// 3. Replace all character literals with ints.
+// 4. Checkwhite.
+//
+// Whitespaces, newlines and indentations are purely for readability and are
+// needed only when necessary. Thus, the example of TOK_JMP can also be written
+// as:
+//
+// #a
+// @a = 0
+// :loop
+// @a ++
+// << @a + '0' << '\n'
+// ? @a == 100 , =>1 ; =>loop . :1
+//
+// Or even denser:
+//
+// #a@a=0:loop@a++<<@a+'0'<<'\n'?@a==100,=>1;=>loop.:1
 void preprocess(string& s)
 {
+	for(int i = 0; i < s.length(); i++)
+	{
+		if(s[i] != '`')
+			continue;
+		s.erase(i, 1);
+		if(i >= s.length())
+			throw out_of_range(ERR_CMT_UNXP_EOF);
+		while(s[i] != '`')
+		{
+			s.erase(i, 1);
+			if(i >= s.length())
+				throw out_of_range(ERR_CMT_UNXP_EOF);
+		}
+		s.erase(i, 1);
+	}
 	for(int i = 0; i < s.length(); i++)
 	{
 		if(s[i] != '\"')
@@ -460,31 +480,96 @@ void preprocess(string& s)
 		s.insert(j, str);
 		i = j - 1;
 	}
-	while(IS_WHITESPACE(s[0]) && !s.empty())
+	while(is_whitespace(s[0]) && !s.empty())
 		s.erase(0, 1);
 	for(int i = 0; i <= s.length(); i++)
 	{
-		if(!IS_WHITESPACE(s[i]))
+		if(!is_whitespace(s[i]))
 			continue;
-		while(IS_WHITESPACE(s[i]) && i < s.length())
+		while(is_whitespace(s[i]) && i < s.length())
 			s.erase(i, 1);
 		s.insert(i, " ");
 	}
-	while(IS_WHITESPACE(s[s.length() - 1]) && !s.empty())
+	while(is_whitespace(s[s.length() - 1]) && !s.empty())
 		s.erase(s.length() - 1);
 }
 
+//                          ** TOKENIZATION **
+// ----------------------------------------------------------------------------
+// Tokenizes the code string into a list of tokens.
 void tokenize(string s)
 {
 	cout << "Hello, World!\n";
 }
 
+//                             ** PARSE **
+// ----------------------------------------------------------------------------
+// Parses the list of tokens into statements, which have four types.
+//
+// ** A. Types of Statements **
+//
+// 1. Nullary Statement
+// This type of statement only consists of a single operation token. RET opera-
+// tions (\) are the only instances of this type of statement.
+//
+// 2. Unary Statement
+//
+// This type of statement consists of an operator token followed by one or more
+// expression(s). Typically, this includes ALLOC operations (#), DEL operations
+// ($), PUSH/POP operations (] and [), LBL operations (:), JMP operations (=>),
+// and I/O operations (>> and <<).
+//
+// 3. Binary Statement
+// 
+// This type of statement consists of an expression followed by an operator to-
+// ken and then followed by a group of one or more expression(s). ASN opera-
+// tions (=) are the only instances of this type of statement.
+//
+// 4. Condition Statement
+// This type of statement refers to the control statement that uses the tokens
+// COND (?), THEN (,), ELSE (;), ELIF(;?) and END (.).
+//
+// ** B. Types of Expressions **
+//
+// 1. Constant
+// A number constant, or a series of calculations that only consists of numbers
+// and thus gives a predetermined number constant.
+//
+// 2. Calculation
+// A series of calculations that contains stuff other than numbers. This in-
+// cludes boolean expressions as they are represented by ints in Eryuelan.
+//
+// 3. Address
+// An address.
+//
+// 4. Value
+// An address following an AT (@) operator.
+//
+// Statements and expressions can be nested.
+void parse()
+{
+	cout << "Hello, World!x2\n";
+}
+
+//                               ** RUNNING **
+// ----------------------------------------------------------------------------
+void run()
+{
+	cout << "Welcome to Eryuelan v0.1!\n";
+	cout << "Copyright (c) 2025 Haocheng Zhang <stevenhaocheng@163.com>. ";
+	cout << "All rights reserved.\n\n";
+	cout << ">>> ";
+}
+
 int main() try
 {
-	string s = R"(#a @a = "before\"after")";
+	string s = R"(`com"me'nt t"e'st`#a @a = "before\"after")";
 	preprocess(s);
-	cout<<"preprocessed:\n"<<s<<endl;
+	cout << "Preprocessed:\n" << s << endl;
 	tokenize(s);
+	parse();
+	run();
+	cout << endl;
 
 	return 0;
 }
