@@ -1,113 +1,124 @@
 #include<iostream>
+#include<cstring>
+#include<stdexcept>
+#include<vector>
+
+#define ERR_CHAR_TOO_LONG "Err: Multiple characters between \'\'."
+#define ERR_CHAR_UNXP_EOF "Err: Unexpected EOF instead of an enclosing \'."
+#define ERR_CHAR_UKN_ESC "Err: Unknown escape sequence."
+#define ERR_STR_UNXP_EOF "Err: Unexpected EOF instead of an enclosing \"."
+
+#define IS_WHITESPACE(c) ((c) == ' ' || (c) == '\t' || (c) == '\n' || (c) == '\r')
+
 using namespace std;
 
-// Whitespace, newline and indenting are purely for readability and are needed
-// only when necessary. Thus, the example of TOK_JMP can also be written as:
+// Whitespaces, newlines and indentations are purely for readability and are
+// needed only when necessary. Thus, the example of TOK_JMP can also be written
+// as:
 //
 // #a
 // @a = 0
 // :loop
 // @a ++
 // << @a + '0' << '\n'
-// ? @a == 100 , ^1 ; ^loop . :1
+// ? @a == 100 , =>1 ; =>loop . :1
 //
 // or even denser:
 //
-// #a@a=0:loop@a++<<@a+'0'<<'\n'?@a==100,^1;^loop.:1
+// #a@a=0:loop@a++<<@a+'0'<<'\n'?@a==100,=>1;=>loop.:1
 
 enum Token
 {
-	// '#', e.g.:
+	//                  ** BASIC MEMORY MANIPULATION **
+	// ------------------------------------------------------------------------
+	// '#': ALLOCATE
 	//
 	// #p `allocate memory the size of int and assign it to identifier p`
+	// @p = 0 `OK, value of p is now 0`
+	// p++ `OK for now`
+	// @p = 1 `INVALID - runtime error, because this piece of memory does not
+	//         belong to p`
 	//
-	// #q 3 `allocate memory 3 times the size of int and assign the first uint
-	//       to identifier q.
+	// #q 3 `allocate memory 3 times the size of int and assign the first 4
+	//       bytes to identifier q`
+	// @q = 0 `OK`
+	// q++
+	// @q = 1 `OK`
+	// q++
+	// @q = 2 `OK`
+	// q++
+	// @q = 3 `INVALID - runtime error, same as above`
 	TOK_ALLOC,
-	// '$', e.g.:
+
+	// '$', FREE
 	// 
 	// #p
+	// #p `ILLEGAL - redefinition of identifier p`
 	// @p = 0
-	// $p `deallocates the memory that used to be p for future use, also de-
-	//     registers the identifier`
+	// $p `frees the memory that used to be p for future use, also deregisters
+	//     the identifier`
+	// @p = 0 `ILLEGAL - unknown identifier`
+	// #p @p = 0 `OK`
 	//
-	// #p 4
-	// @p = 0
-	// @(p+1) = 1
-	// @(p+2) = 2
-	// @(p+3) = 3
-	// $p `if a block of memory was alloc-ed for p, it will be automatically
+	// #q 4
+	// @q = 0
+	// @(q+1) = 1
+	// @(q+2) = 2
+	// @(q+3) = 3
+	// $q `if a block of memory was alloc-ed for p, it will be automatically
 	//     deallocated`
+	//
+	// #r 3
+	// @r = -1
+	// r++
+	// @r = -2
+	// r++
+	// @r = -3 `initializes an array: [-1,-2,-3], r pointing at -3`
+	// $r `removes the original memory block allocated for r, which currently
+	//     is r, r-1 and r-2`
 	TOK_DEL,
-	// ']', e.g.:
+
+	
+	//                         ** STACK OPERATION **
+	// ------------------------------------------------------------------------
+	// ']', PUSH
 	//
 	// ] @a `push the value of a into stack`
 	// 
 	// ] a `push the address of a into stack`
 	TOK_PUSH,
-	// '[', e.g.:
+
+	// '[', POP
 	//
 	// [ a `pop the top of stack into a`
 	// 
-	// `[ @a` `illegal!!`
+	// `[ @a` `INVALID, value of a pointer is rvalue`
 	TOK_POP,
-	// '+', e.g.:
-	//
-	// @a + 2 `data pointed by a plus 2`
-	//
-	// a + 2 `2*32 bits forward of address of pointer a`
-	TOK_ADD,
-	// '-', e.g.:
-	//
-	// @s - 3  `data pointed by s minus 3`
-	//
-	// s - 2 `2*32 bits backward of address of pointer s`
-	TOK_SUB,
-	// '*', e.g.:
-	//
-	// @m * 8 `data pointed by m times 3`
-	TOK_MULT,
-	// '/', e.g.:
-	//
-	// @d / 3 `data pointed d divided by 3, round to 0 if not divisible`
-	TOK_DIV,
-	// "++", e.g.:
-	//
-	// @q ++ `data pointed by q incremented by 1`
-	//
-	// q ++ `pointer q moves forward 32 bits`
-	TOK_INC,
-	// "--", e.g.:
-	//
-	// @r -- `data pointed by q decremented by 1`
-	//
-	// r -- `pointer q moves backward 32 bits`
-	TOK_DEC,
-	// '@', e.g.:
+
+
+	//                        ** DATA MANIPULATION **
+	// ------------------------------------------------------------------------
+	// '@', AT
 	//
 	// @q `data in memory pointed by q`
 	TOK_AT,
-	// '=', e.g.:
+
+	// '=', ASSIGN
 	//
 	// @a = 3 `data in memory pointed by a is now 3`
-	TOK_ASSIGN,
-	// "==", e.g.:
 	//
-	// @a == 9 `true if data pointed by a is equal to 9, false otherwise`
-	TOK_EQ,
-	// "!=", e.g.:
+	// #r 4
+	// @r = 0 @(r+1) = 1 @(r+2) = 2 @(r+3) = 3 `tl;didn't want to code`
+	// @r = 0 1 2 3 `puts the four numbers in one statement`
 	//
-	// @a != _7 `true if data pointed by a is not equal to negative 7, false
-	//           otherwise`
-	TOK_NEQ,
-	// '<', e.g.:
-	//
-	// @a < 30 `true if data pointed by a is less than 30, false otherwise`
-	TOK_LESS,
-	// '>', e.g.:
-	//
-	// @a > 14 `true if data pointed by a is greater than 14, false otherwise`
-	TOK_GREAT,
+	// #s 5
+	// @r = 'H' 'e' 'l' 'l' 'o'
+	// @r = "Hello" `be lazy`
+	TOK_ASN,
+
+
+	//           ** ARITHMETIC, BITWISE AND LOGICAL OPERATIONS **
+	// ------------------------------------------------------------------------
 	// ** Notes on bitwise and logical operators and truthiness **
 	// A boolean expression such as 1 == 2 produces a temporary int-sized
 	// memory location storing the result (0, aka false, in this case). When
@@ -115,33 +126,121 @@ enum Token
 	// version - both produce 0 in this example. So expressions like
 	// 1 == 2 & 1 < 6 work well even if the operator is used bitwisely. As a
 	// result, being loyal to the idea of a minimalist language, logical and
-	// (&&), or (||) and not (!) operators are omitted.
+	// (&&), or (||) operators are omitted.
 	//
 	// Any value is considered truthy, except 0, which is considered falsey.
 	// This definition of truthiness is the same as C and C-like languages, and
 	// I (personally) believe that it is quite natural.
 	//
-	// '&', e.g.:
 	//
-	// @a & @b `bitwise AND of a and b`
+	// '+', ADD
+	//
+	// @a + 2 `value of a plus 2`
+	//
+	// a + 2 `2*32 bits forward of address of pointer a`
+	TOK_ADD,
+
+	// '-', SUBTRACT or NEGATE
+	// 
+	// * Have both unary version and binary version.
+	//
+	// @s - 3  `value of s minus 3`
+	//
+	// s - 2 `2*32 bits backward of address of pointer s`
+	//
+	// -5 => -5
+	//
+	// -(a-b) => b-a 
+	TOK_SUB,
+
+	// '*', MULTIPLY
+	//
+	// @m * 8 `value of m times 3`
+	TOK_MULT,
+
+	// '/', DIVIDE
+	//
+	// @d / 3 `value of d divided by 3, rounded towards 0 if not divisible`
+	TOK_DIV,
+
+	// '%', MODULUS
+	//
+	// @e % 6 `remainder of e divided by 6`
+
+	// "++", INCREMENT
+	//
+	// @q ++ `value of q incremented by 1`
+	//
+	// q ++ `pointer q moves forward 32 bits`
+	TOK_INC,
+
+	// "--", DECREMENT
+	//
+	// @r -- `value of q decremented by 1`
+	//
+	// r -- `pointer q moves backward 32 bits`
+	TOK_DEC,
+
+	// '&', AND
+	//
+	// @a & @b `bitwise AND of the two operators`
 	TOK_AND,
-	// '|', e.g.:
+
+	// '|', OR
 	//
-	// @a | @b `bitwise OR of a and b`
+	// @a | @b `bitwise OR of the two operators`
 	TOK_OR,
-	// '~', e.g.:
+
+	// '^', XOR
 	//
-	// ~ @a `bitwise not of a`
+	// @a ^ @b `bitwise XOR of the two operators`
+
+	// '~', NOT (or one's complement)
+	//
+	// ~ @a `bitwise not of the operator`
 	TOK_NOT,
-	// ':', e.g.:
+
+	// '!', LOGICAL NOT
 	//
-	// :label `labels demand their own line, and they are mostly used along
-	//         with the jmp token '^', see below for more information on that.`
+	// ! @a `logical not of the operator`
+	TOK_LNOT,
+
+	//                           ** COMPARISON **
+	// ------------------------------------------------------------------------
+	// "==", EQUAL TO
+	//
+	// @a == 9 `true if value of a is equal to 9, false otherwise`
+	//
+	// a == b `a and b point to the same memory location`
+	TOK_EQ,
+
+	// '<', LESS THAN
+	//
+	// @a < 30 `true if value of a is less than 30, false otherwise`
+	TOK_LT,
+
+	// '>', GREATER THAN
+	//
+	// @a > 14 `true if value of a is greater than 14, false otherwise`
+	TOK_GT,
+
+	// '(' and ')', PARENTHESES, used to alter the order of calculation
+	TOK_OPAR,
+	TOK_CPAR,
+
+
+	//                       ** PROGRAM STRUCTURE **
+	// ------------------------------------------------------------------------
+	// ':', LABEL
+	//
+	// :label `labels are most commonly used along
+	//         with the jmp token '=>', see below for more information on that.`
 	// 
 	// :1 `numerical names can be used to indicate a temporary label. for an
 	//     example using this, see below.`
 	TOK_LBL,
-	// '^', e.g.:
+
+	// "=>", JUMP
 	//
 	// #a
 	// @a = 0
@@ -153,42 +252,64 @@ enum Token
 	//     << '\n'
 	//     `checks if @a is 100; if yes then break, else enter next loop.`
 	//	   ? @a == 100 ,
-	//	       ^1 `jumping to numbers lands you on the very next label with the
-	//	           same number. This helps avoid using excessive labels with
-	//	           meaningless names for break statements. These labels can be
-	//	           considered temporary and can be reused.
+	//	       =>1 `jumping to numbers lands you on the very next label with the
+	//	            same number. This helps avoid using excessive labels with
+	//	            meaningless names for break statements. These labels can be
+	//	            considered temporary and can be reused, while labels whose
+	//	            names are identifiers cannot be redefined and are unique.`
 	//	   ;
-	//	       ^loop
+	//	       =>loop
 	//	   .
 	// :1
-	//	       
 	TOK_JMP,
+
+	// '\', RETURN, jumps to the next statement of the last invoked "=>"
+	//              statement:
+	//
+	// :q
+	//     @a++
+	//     \
+	// @a = 0
+	// =>q
+	// << @a + '0' `=> prints: 1`
+	//
+	// \ 5 `sets special identifier @_ to 5 and return`
+	// \ a `let _ be the same as a and return`
+	TOK_RET,
+
+	
+	//                          ** CONDITIONS **
+	// ------------------------------------------------------------------------
 	// '?', e.g.:
 	//
-	// `prints 3 if @a > 3, 0 is @a < 0, else itself`
+	// `prints 3 if @a > 3, 0 if @a < 0, else itself`
 	// ? @a > 3 ,
 	//     << '3'
 	// ;? @a < 0 , `literally else if statement`
 	//     << '0'
 	// ;
 	//     << @a + '0'
-	// ..
-	TOK_RET
-	// '\', returns tho the next line of the last invoked ^ statement. e.g.:
-	//
-	// :q
-	//     @a++
-	//     \
-	// @a = 0
-	// ^q
-	// << @a `=> prints: 1`
+	// .
 	TOK_COND,
+
 	// ','. see above.
 	TOK_THEN,
+
 	// ';'. see above
 	TOK_ELSE,
+
+	// ";?", see above
+	//
+	// Special token for elif statements to avoid the use of multiple '.' at
+	// the end of a control statement.
+	TOK_ELIF,
+
 	// '.', indicates where a '?' statement ends, see above
 	TOK_END,
+
+
+	//                        ** INPUT / OUTPUT **
+	// ------------------------------------------------------------------------
 	// ">>", e.g.:
 	//
 	// `fetch the next character in input buffer and stores it in a`
@@ -196,6 +317,7 @@ enum Token
 	//
 	// `>> @a` `illegal!!`
 	TOK_IN,
+
 	// "<<", e.g.:
 	//
 	// `attempt to output the parameter as a char`
@@ -203,31 +325,170 @@ enum Token
 	// << 9 `=>	prints: <tab>`
 	// << '9' `=> prints: 9` 
 	TOK_OUT,
-	// An identifier. An identifier may only start with a letter, and may
+
+	
+	//                          ** IDENTIFIER **
+	// ------------------------------------------------------------------------
+	// An identifier. An identifier may only start with a letter or _, and may
 	// contain A-Za-z0-9_ after that.
 	// 
 	// Valid identifiers:
 	// AkzZ
 	// A_________________
 	// a694_931
-	// an_1d3nt1f13r_w1th_a_v3ry_10ng_nam3_and_s0me_numb3rs
+	// an_1d3nt1f13r_w1th_a_v3ry_10ng_nam3_and_s0me_num63rs
+	//
+	// Identifiers that start with '_' and followed by digits are reserved for
+	// function calls. They can be used WITHOUT declaration or initiation. See
+	// examples/fib.eyl as an example for more information on this.
+	//
+	// The special identifier @_ is also related to functions. It stores the
+	// return value of a funtion when using the '\' (aka RET) operator with a
+	// parameter.
 	//
 	// Invalid identifiers:
-	// _k (tokens starting with _ indicates a negative number, such as _5)
 	// 08dd (identifiers cannot start with a digit)
 	TOK_ID,
-	// A number.
+
+	
+	//                        ** NUMERIC LITERAL **
+	// ------------------------------------------------------------------------
+	// A number. Might represent a char.
 	// 42 => 42
-	// _42 => -42
 	// 0h42 ≡ 0x42 => 66
 	// 0o42 ≡ 042 => 34
+	// 0b101010 => 42
 	// '*' => 42
 	// Note that character literals are just aliases for the corresponding
 	// number, as in the last example.
 	TOK_NUM
+};
+
+vector<Token> tokens;
+
+//                            ** PREPROCESSING **
+// ----------------------------------------------------------------------------
+// As a really simple language, one could expect Eryuelan to have little need
+// for preprocessing. As such, there are only three operations that the prepro-
+// cessor is meant to do (in order):
+//
+// 1. Replace all string literals with a list of characters.
+// 2. Replace all character literals with ints.
+// 3. Checkwhite.
+void preprocess(string& s)
+{
+	for(int i = 0; i < s.length(); i++)
+	{
+		if(s[i] != '\"')
+			continue;
+		if(i > 0)
+			if(s[i - 1] == '\\')
+			{
+				i++;
+				continue;
+			}
+		int j = i;
+		string str = " ";
+		i++;
+		if(i >= s.length())
+			throw out_of_range(ERR_STR_UNXP_EOF);
+		while(s[i] != '\"')
+		{
+			if(s[i] == '\"') break;
+			str.append(" \'");
+			str.push_back(s[i]);
+			if(s[i] == '\\') // escape char
+			{
+				if(i >= s.length() - 1)
+					throw out_of_range(ERR_STR_UNXP_EOF);
+				if(s[i + 1] == '\"')
+				{
+					str.append("\"\' ");
+					i += 2;
+					if(i >= s.length())
+						throw out_of_range(ERR_STR_UNXP_EOF);
+					continue;
+				}
+				else
+					str.push_back(s[++i]);
+			}
+			str.append("\' ");
+			i++;
+			if(i >= s.length())
+				throw out_of_range(ERR_STR_UNXP_EOF);
+		}
+		str.append(" ");
+		s.erase(j, i - j + 1);
+		s.insert(j, str);
+		i = j - 1;
+	}
+	for(int i = 0; i < s.length(); i++)
+	{
+		int j = i;
+		if(s[i] != '\'')
+			continue;
+		int t;
+		if(i >= s.length() - 2)
+			throw out_of_range(ERR_CHAR_UNXP_EOF);
+		if(s[i + 1] == '\\') // escape chars
+		{
+			if(i >= s.length() - 3)
+				throw out_of_range(ERR_CHAR_UNXP_EOF);
+			if(s[i + 3] != '\'')
+				throw out_of_range(ERR_CHAR_TOO_LONG);
+			switch(s[i + 2])
+			{
+				case 'n': t = 10; break;
+				case '\"': t = '\"'; break;
+				case '\'': t = '\''; break;
+				// TODO: handle escape chars
+				default: throw range_error(ERR_CHAR_UKN_ESC);
+			}
+			i += 4;
+		}
+		else // not an escape char
+		{
+			if(s[i + 2] != '\'')
+				throw out_of_range(ERR_CHAR_TOO_LONG);
+			t = s[i + 1];
+			i += 3;
+		}
+		string str = " ";
+		str.append(to_string(t));
+		str.push_back(' ');
+		s.erase(j, i - j);
+		s.insert(j, str);
+		i = j - 1;
+	}
+	while(IS_WHITESPACE(s[0]) && !s.empty())
+		s.erase(0, 1);
+	for(int i = 0; i <= s.length(); i++)
+	{
+		if(!IS_WHITESPACE(s[i]))
+			continue;
+		while(IS_WHITESPACE(s[i]) && i < s.length())
+			s.erase(i, 1);
+		s.insert(i, " ");
+	}
+	while(IS_WHITESPACE(s[s.length() - 1]) && !s.empty())
+		s.erase(s.length() - 1);
 }
 
-int main()
+void tokenize(string s)
 {
+	cout << "Hello, World!\n";
+}
+
+int main() try
+{
+	string s = R"(#a @a = "before\"after")";
+	preprocess(s);
+	cout<<"preprocessed:\n"<<s<<endl;
+	tokenize(s);
+
 	return 0;
+}
+catch (const exception& e)
+{
+	cerr << e.what() << endl;
 }
