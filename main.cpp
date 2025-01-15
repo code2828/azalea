@@ -320,7 +320,7 @@ enum Token
 	// AkzZ
 	// A_________________
 	// a694_931
-	// an_1d3nt1f13r_w1th_a_v3ry_10ng_nam3_and_s0me_num63rs
+	// an_1d3nt1f13r_w1th_a_v3ry_10ng_nam3_and_50me_num63r5
 	//
 	// Identifiers that start with '_' and followed by digits are reserved for
 	// function calls. They can be used WITHOUT declaration or initiation. See
@@ -329,6 +329,10 @@ enum Token
 	// The special identifier @_ is also related to functions. It stores the
 	// return value of a funtion when using the '\' (aka RET) operator with a
 	// parameter.
+	//
+	// In general, '_'-beginning identifiers should be reserved for uses like
+	// "function calls" (through JMP (->) operation) or immediately discarded
+	// values.
 	//
 	// Invalid identifiers:
 	// 08dd (identifiers cannot start with a digit)
