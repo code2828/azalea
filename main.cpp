@@ -365,9 +365,26 @@ enum Tokentype
 
 struct Token
 {
-	Tokentype t;
+	Tokentype ttype;
 	string value;
 };
+
+enum Exptype
+{
+	EXP_CONST,
+	EXP_CALC,
+	EXP_ADDR,
+	EXP_VAL
+};
+
+typedef struct Expression_
+{
+	Exptype etype;
+	Token tok;
+	int val; // for numbers
+	Expression_* first;
+	Expression_* second; // might be nullptr
+}* Expression;
 
 vector<Token> tokens;
 
@@ -384,7 +401,7 @@ inline bool is_id(char c)
 inline void push_token(Tokentype tok, string val = "")
 {
 	Token t;
-	t.t = tok;
+	t.ttype = tok;
 	t.value = val;
 	tokens.push_back(t);
 }
@@ -617,56 +634,36 @@ void tokenize(string s)
 		else if(c == ',')
 			push_token(TOK_DELIM);
 		else if(c == '=')
-			if(i < s.length() - 1)
-			{
-				if(s[i + 1] == '=')
-					i++, push_token(TOK_EQ);
-			}
+			if(i < s.length() - 1 && s[i + 1] == '=')
+				i++, push_token(TOK_EQ);
 			else
 				push_token(TOK_ASN);
 		else if(c == '+')
-			if(i < s.length() - 1)
-			{
-				if(s[i + 1] == '+')
-					i++, push_token(TOK_INC);
-			}
+			if(i < s.length() - 1 && s[i + 1] == '+')
+				i++, push_token(TOK_INC);
 			else
 				push_token(TOK_ADD);
 		else if(c == '-')
-			if(i < s.length() - 1)
-			{
-				i++;
-				if(s[i + 1] == '-')
-					push_token(TOK_DEC);
-				else if(s[i + 1] == '>')
-					push_token(TOK_JMP);
-			}
+			if(i < s.length() - 1 && s[i + 1] == '-')
+				i++, push_token(TOK_DEC);
+			else if(i < s.length() - 1 && s[i + 1] == '>')
+				i++, push_token(TOK_JMP);
 			else
 				push_token(TOK_SUB);
 		else if(c == '<')
-			if(i < s.length() - 1)
-			{
-				if(s[i + 1] == '<')
-					i++, push_token(TOK_OUT);
-			}
+			if(i < s.length() - 1 && s[i + 1] == '<')
+				i++, push_token(TOK_OUT);
 			else
 				push_token(TOK_LT);
 		else if(c == '>')
-			if(i < s.length() - 1)
-			{
-				if(s[i + 1] == '>')
-					i++, push_token(TOK_IN);
-			}
+			if(i < s.length() - 1 && s[i + 1] == '>')
+				i++, push_token(TOK_IN);
 			else
 				push_token(TOK_GT);
 		else if(isdigit(c)) // number, TOK_NUM
-		{
 			push_token(TOK_NUM, get_next_number(s, i));
-		}
-		else if(!is_whitespace(c)) // identifier, TOK_ID
-		{
+		else if(!is_whitespace(c))
 			push_token(TOK_ID, get_next_id(s, i));
-		}
 	}
 }
 
@@ -707,12 +704,11 @@ void postprocess()
 // ** B. Types of Expressions **
 //
 // 1. Constant
-// A number constant, or a series of calculations that only consists of numbers
-// and thus gives a predetermined number constant.
+// A number constant.
 //
 // 2. Calculation
-// A series of calculations that contains stuff other than numbers. This in-
-// cludes boolean expressions as they are represented by ints in Eryuelan.
+// A series of calculations. This includes boolean expressions as they are rep-
+// presented by ints in Eryuelan.
 //
 // 3. Address
 // An address.
@@ -765,7 +761,7 @@ int main(int argc, const char** argv) try
 	cout << "Tokenized:\n";
 	for(int i = 0; i < tokens.size(); i++)
 	{
-		cout << tokens[i].t;
+		cout << tokens[i].ttype;
 		if(tokens[i].value != "")
 			cout << " \"" << tokens[i].value << "\"";
 		cout << endl;
