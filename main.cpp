@@ -3,15 +3,15 @@
 #include<stdexcept>
 #include<vector>
 
-#define ERR_CHAR_TOO_LONG "Err: Multiple characters between \'\'."
-#define ERR_CHAR_UNXP_EOF "Err: Unexpected EOF instead of an enclosing \'."
-#define ERR_CHAR_UKN_ESC "Err: Unknown escape sequence."
-#define ERR_STR_UNXP_EOF "Err: Unexpected EOF instead of an enclosing \"."
-#define ERR_CMT_UNXP_EOF "Err: Unexpected EOF instead of an enclosing `."
+#define ERR_CHAR_TOO_LONG "Error: Multiple characters between \'\'."
+#define ERR_CHAR_UNXP_EOF "Error: Unexpected EOF instead of an enclosing \'."
+#define ERR_CHAR_UKN_ESC "Error: Unknown escape sequence."
+#define ERR_STR_UNXP_EOF "Error: Unexpected EOF instead of an enclosing \"."
+#define ERR_CMT_UNXP_EOF "Error: Unexpected EOF instead of an enclosing `."
 
 using namespace std;
 
-enum Token
+enum Tokentype
 {
 	//                  ** BASIC MEMORY MANIPULATION **
 	// ------------------------------------------------------------------------
@@ -180,16 +180,17 @@ enum Token
 	// '^', XOR
 	//
 	// @a ^ @b `bitwise XOR of the two operators`
+	TOK_XOR = 14,
 
 	// '~', NOT (or one's complement)
 	//
 	// ~ @a `bitwise not of the operator`
-	TOK_NOT = 14,
+	TOK_NOT = 15,
 
 	// '!', LOGICAL NOT
 	//
 	// ! @a `logical not of the operator`
-	TOK_LNOT = 15,
+	TOK_LNOT = 16,
 
 	//                           ** COMPARISON **
 	// ------------------------------------------------------------------------
@@ -198,21 +199,21 @@ enum Token
 	// @a == 9 `true if value of a is equal to 9, false otherwise`
 	//
 	// a == b `a and b point to the same memory location`
-	TOK_EQ = 16,
+	TOK_EQ = 17,
 
 	// '<', LESS THAN
 	//
 	// @a < 30 `true if value of a is less than 30, false otherwise`
-	TOK_LT = 17,
+	TOK_LT = 18,
 
 	// '>', GREATER THAN
 	//
 	// @a > 14 `true if value of a is greater than 14, false otherwise`
-	TOK_GT = 18,
+	TOK_GT = 19,
 
 	// '(' and ')', PARENTHESES, used to alter the order of calculation
-	TOK_OPAR = 19,
-	TOK_CPAR = 20,
+	TOK_OPAR = 20,
+	TOK_CPAR = 21,
 
 
 	//                       ** PROGRAM STRUCTURE **
@@ -224,7 +225,7 @@ enum Token
 	// 
 	// :1 `numerical names can be used to indicate a temporary label. for an
 	//     example using this, see below.`
-	TOK_LBL = 21,
+	TOK_LBL = 22,
 
 	// "->", JUMP
 	//
@@ -256,7 +257,7 @@ enum Token
 	// @_1 = 1 @_2 = 2 @_3 = 3 @_4 = 4
 	// ->function
 	// [_4, _3, _2, _1
-	TOK_JMP = 22,
+	TOK_JMP = 23,
 
 	// '\', RETURN, jumps to the next statement of the last invoked "->"
 	//              statement:
@@ -269,7 +270,7 @@ enum Token
 	// << @a + '0' `-> prints: 1`
 	//
 	// \ 6 `equivalent to: @_ = 6 \ `
-	TOK_RET = 23,
+	TOK_RET = 24,
 
 	
 	//                          ** CONDITIONS **
@@ -285,13 +286,13 @@ enum Token
 	//     << @a + '0'
 	// .. `two END's, one for if, one for elif`
 	//
-	TOK_COND = 24,
+	TOK_COND = 25,
 
 	// ';'. see above
-	TOK_ELSE = 25,
+	TOK_ELSE = 26,
 
 	// '.', indicates where a '?' statement ends, see above
-	TOK_END = 26,
+	TOK_END = 27,
 
 
 	//                        ** INPUT / OUTPUT **
@@ -362,12 +363,70 @@ enum Token
 	TOK_NUM = 130
 };
 
+struct Token
+{
+	Tokentype t;
+	string value;
+};
+
+vector<Token> tokens;
+
 inline bool is_whitespace(char c)
 {
 	return ((c) == ' ' || (c) == '\t' || (c) == '\n' || (c) == '\r');
 }
 
-vector<Token> tokens;
+inline bool is_id(char c)
+{
+	return isalpha(c) || isdigit(c) || (c == '_');
+}
+
+inline void push_token(Tokentype tok, string val = "")
+{
+	Token t;
+	t.t = tok;
+	t.value = val;
+	tokens.push_back(t);
+}
+
+string get_next_number(string form, int& index)
+{
+    if (index < 0 || index >= form.length())
+        return "NaN";
+    string res = "";
+    while (isdigit(form.at(index)))
+    {
+		res.push_back(form[index]);
+        if (++index >= form.length())
+            break;
+    }
+	index--;
+    return res;
+}
+
+string get_next_id(string form, int& index)
+{
+    if (index < 0 || index >= form.length())
+        throw range_error("Fatal: Unknown error occured in get_next_id()!");
+    string res = "";
+    while (is_id(form.at(index)))
+    {
+		res.push_back(form[index]);
+        if (++index >= form.length())
+            break;
+    }
+	index--;
+    return res;
+}
+
+string read_till_eof()
+{
+	string res = "";
+	char c;
+	while((c = getchar()) != EOF)
+		res.push_back(c);
+	return res;
+}
 
 //                            ** PREPROCESSING **
 // ----------------------------------------------------------------------------
@@ -514,7 +573,108 @@ void preprocess(string& s)
 // Tokenizes the code string into a list of tokens.
 void tokenize(string s)
 {
-	cout << "Hello, World!\n";
+	for(int i = 0; i < s.length(); i++)
+	{
+		char c = s[i];
+		if(c == '#')
+			push_token(TOK_ALLOC);
+		else if(c == '$')
+			push_token(TOK_DEL);
+		else if(c == ']')
+			push_token(TOK_PUSH);
+		else if(c == '[')
+			push_token(TOK_POP);
+		else if(c == '@')
+			push_token(TOK_AT);
+		else if(c == '*')
+			push_token(TOK_MULT);
+		else if(c == '/')
+			push_token(TOK_DIV);
+		else if(c == '&')
+			push_token(TOK_AND);
+		else if(c == '|')
+			push_token(TOK_OR);
+		else if(c == '^')
+			push_token(TOK_XOR);
+		else if(c == '~')
+			push_token(TOK_NOT);
+		else if(c == '!')
+			push_token(TOK_LNOT);
+		else if(c == '(')
+			push_token(TOK_OPAR);
+		else if(c == ')')
+			push_token(TOK_CPAR);
+		else if(c == ':')
+			push_token(TOK_LBL);
+		else if(c == '\\')
+			push_token(TOK_RET);
+		else if(c == '?')
+			push_token(TOK_COND);
+		else if(c == ';')
+			push_token(TOK_ELSE);
+		else if(c == '.')
+			push_token(TOK_END);
+		else if(c == ',')
+			push_token(TOK_DELIM);
+		else if(c == '=')
+			if(i < s.length() - 1)
+			{
+				if(s[i + 1] == '=')
+					i++, push_token(TOK_EQ);
+			}
+			else
+				push_token(TOK_ASN);
+		else if(c == '+')
+			if(i < s.length() - 1)
+			{
+				if(s[i + 1] == '+')
+					i++, push_token(TOK_INC);
+			}
+			else
+				push_token(TOK_ADD);
+		else if(c == '-')
+			if(i < s.length() - 1)
+			{
+				i++;
+				if(s[i + 1] == '-')
+					push_token(TOK_DEC);
+				else if(s[i + 1] == '>')
+					push_token(TOK_JMP);
+			}
+			else
+				push_token(TOK_SUB);
+		else if(c == '<')
+			if(i < s.length() - 1)
+			{
+				if(s[i + 1] == '<')
+					i++, push_token(TOK_OUT);
+			}
+			else
+				push_token(TOK_LT);
+		else if(c == '>')
+			if(i < s.length() - 1)
+			{
+				if(s[i + 1] == '>')
+					i++, push_token(TOK_IN);
+			}
+			else
+				push_token(TOK_GT);
+		else if(isdigit(c)) // number, TOK_NUM
+		{
+			push_token(TOK_NUM, get_next_number(s, i));
+		}
+		else if(!is_whitespace(c)) // identifier, TOK_ID
+		{
+			push_token(TOK_ID, get_next_id(s, i));
+		}
+	}
+}
+
+//                         ** POSTPROCESSING **
+// ----------------------------------------------------------------------------
+void postprocess()
+{
+	cout << "Hello, World! -- from the postprocessor\n";
 }
 
 //                             ** PARSE **
@@ -540,9 +700,9 @@ void tokenize(string s)
 // ken and then followed by a group of one or more expression(s). ASN opera-
 // tions (=) are the only instances of this type of statement.
 //
-// 4. Condition Statement
+// 4. Conditional Statement
 // This type of statement refers to the control statement that uses the tokens
-// COND (?), THEN (,), ELSE (;), ELIF(;?) and END (.).
+// COND (?), ELSE (;), and END (.).
 //
 // ** B. Types of Expressions **
 //
@@ -560,30 +720,59 @@ void tokenize(string s)
 // 4. Value
 // An address following an AT (@) operator.
 //
-// Statements and expressions can be nested.
+// Expressions can be nested.
 void parse()
 {
-	cout << "Hello, World!x2\n";
+	cout << "Hello, World! -- from the parser\n";
 }
 
-//                               ** RUNNING **
+//                             ** INTERPRETATION **
 // ----------------------------------------------------------------------------
-void run()
+void interpret()
+{
+	cout << "Hello, World! -- from the interpreter\n";
+}
+
+//                              ** INTERACTION **
+// ----------------------------------------------------------------------------
+void interact()
 {
 	cout << "Welcome to Eryuelan v0.1!\n";
 	cout << "Copyright (c) 2025 Haocheng Zhang <stevenhaocheng@163.com>. ";
 	cout << "All rights reserved.\n\n";
 	cout << ">>> ";
+	char c;
+	while((c = getchar()) != EOF)
+	{
+		if(c == '\n')
+			cout << ">>> ";
+	}
 }
 
-int main() try
+int main(int argc, const char** argv) try
 {
-	string s = R"(`'t"e's"t`#a 12, b @a = "before\"after" @b = 19     )";
+	if(argc <= 1)
+		interact();
+	if(!freopen(argv[1], "r+", stdin))
+	{
+		perror(argv[1]);
+		return 1;
+	}
+	string s = read_till_eof();
 	preprocess(s);
 	cout << "Preprocessed:\n" << s << endl;
 	tokenize(s);
+	cout << "Tokenized:\n";
+	for(int i = 0; i < tokens.size(); i++)
+	{
+		cout << tokens[i].t;
+		if(tokens[i].value != "")
+			cout << " \"" << tokens[i].value << "\"";
+		cout << endl;
+	}
+	postprocess();
 	parse();
-	run();
+	interpret();
 
 	return 0;
 }
@@ -591,3 +780,4 @@ catch (const exception& e)
 {
 	cerr << e.what() << endl;
 }
+
