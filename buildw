@@ -1,1 +1,0 @@
-x86_64-w64-mingw32-g++ -Wall -Wextra -Wno-sign-compare -g3 main.cpp
