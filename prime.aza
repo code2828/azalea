@@ -1,0 +1,32 @@
+(
+#p, 26;
+#i;
+#number;
+#counter;
+#remainder;
+
+=p, 2;
+=number, 3;
+=counter, 1;
+
+:acc;
+    =i, 0;
+    :try_divide;
+        (=remainder, %@number; @p, i),
+        ?==@remainder; 0,
+        (
+            =number, +@number; 1;;
+            ->acc
+        );
+        =i, (+@i; 1);
+        ?&<@i; @counter; <*@p,i,@p,i; @number;
+            ->try_divide,
+    =$(+p, @counter), @number;
+    =counter, (+@counter; 1);
+    =number,  (+@number;  1);
+    ?<@number; 100,
+        ->acc;
+
+$$p, i, number, counter;
+0
+)
