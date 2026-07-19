@@ -1,0 +1,4 @@
+(
+{foo}(:label.?_1,(_2,->label),$$label).
+foo(0)
+)
