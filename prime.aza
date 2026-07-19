@@ -1,4 +1,9 @@
 (
+{++} (=_1,+@_1,1),
+{--} (=_1,-@_1,1),
+{for} ( _1, :_, ?_2, (_4, _3, ->_), $$_ )
+{while} ( :_, ?_1, (_2, ->_), $$_ )
+
 #p, 26;
 #i;
 #number;
@@ -6,26 +11,21 @@
 #remainder;
 
 =p, 2;
-=number, 3;
-=counter, 1;
 
-:acc;
-    =i, 0;
-    :try_divide;
+for (=number,3;=counter,1), (<@number;100), (++number,++counter),
+(
+    :continue,
+    for (=i,0), (&<@i;@counter;<*@p,i,@p,i;@number), (++i),
+    (
         (=remainder, %@number; @p, i),
         ?==@remainder; 0,
         (
-            =number, +@number; 1;;
-            ->acc
+            ++number,
+            ->continue
         );
-        =i, (+@i; 1);
-        ?&<@i; @counter; <*@p,i,@p,i; @number;
-            ->try_divide,
+    ),
     =$(+p, @counter), @number;
-    =counter, (+@counter; 1);
-    =number,  (+@number;  1);
-    ?<@number; 100,
-        ->acc;
+),
 
 $$p, i, number, counter;
 0
