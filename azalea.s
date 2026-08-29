@@ -280,11 +280,12 @@ debug_output:
 kill:
     push rdi
     sub rsi, 5
-    mov rdx, 5
+    mov rdx, 6
     mov edi, 1
     mov eax, 1
     syscall
     pop rdi
+    jmp debug_output
 success:
     mov eax, 60
     syscall
@@ -597,14 +598,14 @@ read_from_pos:
     pop rbp
     jmp .new_var_end
 .new_label:
+    call read_identifier_from_pos
+    cmp rax, 0
+    jz @f
     movzx rbx, r8w
     imul rbx, 10
     lea rbx, [i+rbx]
     mov word [rbx], r12w
     mov dword [rbx+2], 0xFFFFFFFF
-    call read_identifier_from_pos
-    cmp rax, 0
-    jz @f
     push rbp
     sub rsp, 8
     mov word [rsp+2], r8w
@@ -638,15 +639,12 @@ read_from_pos:
     imul rbx, 10
     lea rbx, [i+rbx]
     movzx rbx, word [rbx]
-    cmp rbx, 0xE000 ; builtin commands?
-    jnl .no_max_argument
     cmp cx, word [max_arg+2*rbx]
     jne .set_prev_sibling
-.no_max_argument:
     cmp rsp, rbp
     jge .set_prev_sibling
 ; TODO: Buggy! ")," sets r10 to the last invocable inside the parenthesis,
-; reason unknown. We skip the comma to fix it for now.
+; because we mov r10, r8 at .set_prev_sibling. We skip the comma to fix it for now.
 .comma_terminate_current_invocable:
     movzx rbx, word [rsp+2]
     mov r10, rbx
@@ -656,11 +654,8 @@ read_from_pos:
     mov cx, word [rsp]
     add rsp, 4
     inc cx
-    cmp rbx, 0xE000
-    jnl .no_max_argument_loop
     cmp cx, word [max_arg+2*rbx]
     jne .continue
-.no_max_argument_loop:
     cmp rsp, rbp
     jge .continue
     jmp .comma_terminate_current_invocable
@@ -687,11 +682,8 @@ read_from_pos:
     mov cx, word [rsp]
     add rsp, 4
     inc cx
-    cmp rbx, 0xE000
-    jnl .no_max_argument_loop_2
     cmp cx, word [max_arg+2*rbx]
     jne .continue
-.no_max_argument_loop_2:
     cmp rsp, rbp
     jge .continue
     jmp .semicolon_terminate_current_invocable
@@ -1068,6 +1060,9 @@ err_stack_empty:
 err_ukn_id:
     mov rdi, 9
     jmp kill
+err_empty_label:
+    mov rdi, 10
+    jmp kill
 err_empty_command:
     mov rdi, 11
     jmp kill
@@ -1139,5 +1134,16 @@ trie db 0, 4 dup (0xFF), 1, 0, 0xFF, 0xFF, \
         ':', 0x28, 0xC0, 4 dup (0xFF), 0x1B, 0, \
         '{', 0x2A, 0xC0, 6 dup (0xFF), \
         65507 dup (0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)
-max_arg db 0xC000 dup (1, 0), 2, 0, 0xFF, 0xFF, 2, 0, 0xFF, 0xFF, 1, 0, 0xFF, \
-           0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3FF7 dup (0xFF, 0xFF)
+max_arg db 0xC000 dup (1, 0), \
+           2,0,         0xFF,0xFF,  2,0,        0xFF,0xFF, \
+           1,0,         0xFF,0xFF,  0xFF,0xFF,  0xFF,0xFF, \ 
+           6 dup 0xFF,                          2,0,       \
+           8 dup 0xFF,                                     \
+           2,0,         8 dup 0xFF,                        \
+                        2,0,        8 dup 0xFF,            \
+                                    2,0,        2,0,       \
+           0xFF,0xFF,   1,0,        1,0,        0xFF,0xFF, \
+           0xFF,0xFF,   2,0,        8 dup 0xFF,            \
+                                    3,0,        0xFF,0xFF, \
+           1,0,         1,0,        1,0,        0xFF,0xFF, \
+           0x3FD4 dup (0xFF, 0xFF)
