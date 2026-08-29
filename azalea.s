@@ -276,7 +276,16 @@ debug_output:
     jl @b
 
     xor edi, edi
+    jmp success
 kill:
+    push rdi
+    sub rsi, 5
+    mov rdx, 5
+    mov edi, 1
+    mov eax, 1
+    syscall
+    pop rdi
+success:
     mov eax, 60
     syscall
 
@@ -298,7 +307,7 @@ preprocessor:
     xor rdi, rdi
     lea rsi, [txt+2] ; counter for preprocessed text
                      ; first two bytes stores length
-    lea rcx, [prog]
+    lea rcx, [prog2]
 .iterator:
     mov dil, [rcx]
     cmp dil, 0 ; \0
@@ -892,6 +901,7 @@ add_trie:
 ; TODO: BUG! say we have 'for' and 'foreach'. when querying 'forea', the stub ;
 ; node (uid = 0xFFFF) will be returned. ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 search_trie:
+    push rsi
     push rbx
     xor rbx, rbx
     push 0
@@ -926,8 +936,12 @@ search_trie:
     cmp rax, 0
     jz .actually_not_found
     inc rsi
+    pop rbx
+    add rsp, 8 ; pop rsi to nowhere
+    ret
 .actually_not_found:
     pop rbx
+    pop rsi
     ret
 ;;; END OF search_trie ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1063,7 +1077,7 @@ err_unexp_eof_bracket:
 
 segment readable writeable
 
-prog db "({++}(=_1,+1,@_1.$_1);#a;=a,56;#b;=b,3;#c;=c,+(+a),(+b).<<@a;@c;10)", 0
+prog file "prime.aza"
 trietest db "for"
 prog2 file "test.aza"
 escape_map db 34 dup (0xFF), 34, 4 dup (0xFF), 39, 8 dup (0xFF), 0, \

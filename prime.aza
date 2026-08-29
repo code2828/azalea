@@ -1,8 +1,8 @@
 (
 {++} (=_1,+1,@_1.$_1);
 {--} (=_1,-1,@_1.$_1);
-{for} ( _1, :_, ?_2, (_4, _3, ->_), ($$_) );
-{while} ( :_, ?_1, (_2, ->_), ($$_) );
+{for} ( _1, :aaaa, ?_2, (_4, _3, ->aaaa), 0);
+{while} ( :bbbb, ?_1, (_2, ->bbbb), 0);
 
 #p, 26;
 #i;
@@ -22,10 +22,10 @@ for (=number,3;=counter,1), (<@number;100), (++number,++counter),
         (
             ++number,
             ->continue
-        );
-    ),
+        )
+    ).
     =$(+p, @counter), @number;
-),
+).
 
 $$p, i, number, counter;
 0
